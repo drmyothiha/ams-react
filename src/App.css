@@ -3,7 +3,7 @@
   border-radius: 20px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   width: 100%;
-  max-width: 1200px;
+  max-width: 1300px;
   margin: 0 auto;
   overflow: hidden;
 }
@@ -28,8 +28,18 @@ label {
   font-size: 14px;
 }
 
-input, select, textarea {
+ select {
   width: 100%;
+  padding: 12px 15px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 16px;
+  transition: all 0.3s;
+  background: #f9fafb;
+}
+
+input, textarea {
+  width: 90%;
   padding: 12px 15px;
   border: 2px solid #e5e7eb;
   border-radius: 10px;
@@ -109,6 +119,33 @@ textarea {
   transform: none;
 }
 
+/* In your global CSS file */
+.readonly-field {
+  background-color: #f5f5f5 !important;
+  cursor: not-allowed !important;
+}
+
+.field-info {
+  margin: 5px 0 0 0;
+  font-size: 12px;
+  color: #28a745;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.help-text {
+  margin: 5px 0 0 0;
+  font-size: 12px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.full-width {
+  width: 100%;
+}
 /* Appointment Table Styles */
 .appointments-header {
   display: flex;
@@ -452,6 +489,9 @@ pre {
 .form-container {
   max-width: 800px;
   margin: 0 auto;
+}
+.autocomplete-container {
+  width: 85%;
 }
 
 /* Autocomplete Styles */

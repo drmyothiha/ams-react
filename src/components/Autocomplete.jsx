@@ -1,7 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
-const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder }) => {
+const Autocomplete = ({ 
+  value, 
+  onChange, 
+  onProcedureSelect, 
+  onClear, 
+  placeholder,
+  searchType = 'procedure', // 'procedure' for ICHI, 'diagnosis' for ICD-11
+  searchUrl,
+  searchFunction,
+  customSearch = false
+}) => {
   const [searchResults, setSearchResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -33,7 +43,7 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
     setSearchQuery(value);
   }, [value]);
 
-  const searchProcedures = async (query) => {
+  const searchItems = async (query) => {
     if (!query || query.length < 2) {
       setSearchResults([]);
       setShowDropdown(false);
@@ -45,36 +55,49 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
     setSearchStatus('Searching...');
 
     try {
-      // For testing - use sample data if API fails
       let results = [];
       
-      try {
-        const response = await axios.get(`http://localhost/api/ichi/search?q=${encodeURIComponent(query)}&limit=100`);
-        results = response.data.results || [];
-      } catch (apiError) {
-        console.log('API call failed, using sample data:', apiError);
-        // Fallback to sample data
-        results = getSampleProcedures(query);
+      if (customSearch && searchFunction) {
+        // Use custom search function if provided
+        results = await searchFunction(query);
+      } else if (searchUrl) {
+        // Use provided search URL
+        const response = await axios.get(`${searchUrl}${encodeURIComponent(query)}&limit=100`);
+        results = response.data.results || response.data || [];
+      } else {
+        // Default search based on searchType
+        if (searchType === 'procedure') {
+          const response = await axios.get(`http://localhost/api/ichi/search?q=${encodeURIComponent(query)}&limit=100`);
+          results = response.data.results || [];
+        } else if (searchType === 'diagnosis') {
+          const response = await axios.get(`http://localhost/api/icd/search?q=${encodeURIComponent(query)}&limit=100`);
+          results = response.data.results || [];
+        }
+      }
+
+      // Fallback to sample data if no results
+      if (results.length === 0) {
+        results = getSampleItems(query);
       }
 
       setSearchResults(results);
       
       if (results.length > 0) {
         setShowDropdown(true);
-        setSearchStatus(`Found ${results.length} procedure(s). Use arrow keys ↑↓ to navigate, Enter to select.`);
+        setSearchStatus(`Found ${results.length} item(s). Use arrow keys ↑↓ to navigate, Enter to select.`);
       } else {
         setShowDropdown(false);
-        setSearchStatus(`No procedures found for "${query}"`);
+        setSearchStatus(`No ${searchType === 'procedure' ? 'procedures' : 'diagnoses'} found for "${query}"`);
       }
     } catch (error) {
       console.error('Search error:', error);
-      setSearchStatus('Search failed. Using sample data...');
+      setSearchStatus(`Search failed. Using sample data...`);
       // Fallback to sample data
-      const sampleResults = getSampleProcedures(query);
+      const sampleResults = getSampleItems(query);
       setSearchResults(sampleResults);
       if (sampleResults.length > 0) {
         setShowDropdown(true);
-        setSearchStatus(`Found ${sampleResults.length} procedure(s) from sample data.`);
+        setSearchStatus(`Found ${sampleResults.length} item(s) from sample data.`);
       } else {
         setShowDropdown(false);
       }
@@ -83,34 +106,54 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
     }
   };
 
-  // Sample procedure data for fallback
-  const getSampleProcedures = (query) => {
-    const sampleProcedures = [
-      { Code: '001', Title: 'Appendectomy', Description: 'Surgical removal of the appendix' },
-      { Code: '002', Title: 'Cholecystectomy', Description: 'Gallbladder removal surgery' },
-      { Code: '003', Title: 'Colonoscopy', Description: 'Examination of the colon' },
-      { Code: '004', Title: 'Mastectomy', Description: 'Breast tissue removal' },
-      { Code: '005', Title: 'Hysterectomy', Description: 'Uterus removal surgery' },
-      { Code: '006', Title: 'Angioplasty', Description: 'Heart artery widening procedure' },
-      { Code: '007', Title: 'Cataract Surgery', Description: 'Eye lens replacement' },
-      { Code: '008', Title: 'Total Hip Replacement', Description: 'Hip joint replacement surgery' },
-      { Code: '009', Title: 'Knee Arthroscopy', Description: 'Knee joint examination' },
-      { Code: '010', Title: 'Tonsillectomy', Description: 'Tonsil removal surgery' },
-      { Code: '011', Title: 'Cesarean Section', Description: 'C-section delivery' },
-      { Code: '012', Title: 'Laparoscopy', Description: 'Minimally invasive abdominal surgery' },
-      { Code: '013', Title: 'Biopsy', Description: 'Tissue sample collection' },
-      { Code: '014', Title: 'MRI Scan', Description: 'Magnetic Resonance Imaging' },
-      { Code: '015', Title: 'CT Scan', Description: 'Computed Tomography scan' }
-    ];
+  // Sample data for fallback
+  const getSampleItems = (query) => {
+    if (searchType === 'procedure') {
+      const sampleProcedures = [
+        { Code: 'KBO.JB.AE', Title: 'Percutaneous drainage of appendix', Description: 'Drainage procedure for appendix' },
+        { Code: 'KBO.JB.AF', Title: 'Laparoscopic appendectomy', Description: 'Minimally invasive appendix removal' },
+        { Code: 'KBO.JB.AG', Title: 'Open appendectomy', Description: 'Traditional open surgery for appendix removal' },
+        { Code: 'KBP.JB.BA', Title: 'Cholecystectomy', Description: 'Gallbladder removal surgery' },
+        { Code: 'KBP.JB.BB', Title: 'Laparoscopic cholecystectomy', Description: 'Minimally invasive gallbladder removal' },
+        { Code: 'KBR.JB.CA', Title: 'Colonoscopy', Description: 'Examination of the colon' },
+        { Code: 'KBS.JB.DA', Title: 'Mastectomy', Description: 'Breast tissue removal' },
+        { Code: 'KBT.JB.EA', Title: 'Hysterectomy', Description: 'Uterus removal surgery' },
+        { Code: 'KBU.JB.FA', Title: 'Angioplasty', Description: 'Heart artery widening procedure' },
+        { Code: 'KBV.JB.GA', Title: 'Cataract Surgery', Description: 'Eye lens replacement' }
+      ];
 
-    if (!query) return sampleProcedures;
+      if (!query) return sampleProcedures;
 
-    const searchTerm = query.toLowerCase();
-    return sampleProcedures.filter(procedure =>
-      procedure.Title.toLowerCase().includes(searchTerm) ||
-      procedure.Code.toLowerCase().includes(searchTerm) ||
-      (procedure.Description && procedure.Description.toLowerCase().includes(searchTerm))
-    );
+      const searchTerm = query.toLowerCase();
+      return sampleProcedures.filter(item =>
+        item.Title.toLowerCase().includes(searchTerm) ||
+        item.Code.toLowerCase().includes(searchTerm) ||
+        (item.Description && item.Description.toLowerCase().includes(searchTerm))
+      );
+    } else {
+      // Diagnosis sample data (ICD-11)
+      const sampleDiagnoses = [
+        { Code: 'DA03.0', Title: 'Acute appendicitis', Description: 'Acute inflammation of the appendix' },
+        { Code: 'DA03.1', Title: 'Chronic appendicitis', Description: 'Chronic inflammation of the appendix' },
+        { Code: 'DA03.Y', Title: 'Other specified appendicitis', Description: 'Other forms of appendicitis' },
+        { Code: '5A20.0Z', Title: 'Type 2 diabetes mellitus', Description: 'Adult-onset diabetes' },
+        { Code: '5A20.00', Title: 'Type 1 diabetes mellitus', Description: 'Insulin-dependent diabetes' },
+        { Code: 'BA00.Z', Title: 'Essential (primary) hypertension', Description: 'High blood pressure' },
+        { Code: 'BA01.Z', Title: 'Secondary hypertension', Description: 'Hypertension due to other conditions' },
+        { Code: 'CA60.Z', Title: 'Malignant neoplasm of breast', Description: 'Breast cancer' },
+        { Code: 'CA61.Z', Title: 'Malignant neoplasm of lung', Description: 'Lung cancer' },
+        { Code: 'DA92.Z', Title: 'Gastritis', Description: 'Inflammation of stomach lining' }
+      ];
+
+      if (!query) return sampleDiagnoses;
+
+      const searchTerm = query.toLowerCase();
+      return sampleDiagnoses.filter(item =>
+        item.Title.toLowerCase().includes(searchTerm) ||
+        item.Code.toLowerCase().includes(searchTerm) ||
+        (item.Description && item.Description.toLowerCase().includes(searchTerm))
+      );
+    }
   };
 
   const handleInputChange = (e) => {
@@ -123,7 +166,7 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
       clearTimeout(searchTimeoutRef.current);
     }
     
-    // Clear selected procedure if user starts typing manually
+    // Clear selected item if user starts typing manually
     if (value !== newValue) {
       onClear?.();
       setSelectedIndex(-1);
@@ -131,18 +174,18 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
     
     // Debounce search
     searchTimeoutRef.current = setTimeout(() => {
-      searchProcedures(newValue.trim());
+      searchItems(newValue.trim());
     }, 300);
   };
 
-  const handleProcedureClick = (procedure) => {
-    onChange(procedure.Title);
-    onProcedureSelect(procedure);
+  const handleItemClick = (item) => {
+    onChange(item.Title);
+    onProcedureSelect(item);
     setSearchResults([]);
     setShowDropdown(false);
     setSelectedIndex(-1);
-    setSearchStatus(`Selected: ${procedure.Code} - ${procedure.Title}`);
-    setSearchQuery(procedure.Title);
+    setSearchStatus(`Selected: ${item.Code} - ${item.Title}`);
+    setSearchQuery(item.Title);
   };
 
   const handleKeyDown = (e) => {
@@ -179,7 +222,7 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
       case 'Enter':
         e.preventDefault();
         if (selectedIndex >= 0 && selectedIndex < searchResults.length) {
-          handleProcedureClick(searchResults[selectedIndex]);
+          handleItemClick(searchResults[selectedIndex]);
         }
         break;
       case 'Escape':
@@ -206,7 +249,7 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
 
   const handleSearchClick = () => {
     if (searchQuery.trim().length >= 2) {
-      searchProcedures(searchQuery.trim());
+      searchItems(searchQuery.trim());
     } else {
       inputRef.current?.focus();
     }
@@ -228,14 +271,22 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
     }
   };
 
+  const getSystemInfo = () => {
+    if (searchType === 'procedure') {
+      return { system: 'ICHI', url: 'https://icd.who.int/devct11/ichi/en/current' };
+    } else {
+      return { system: 'ICD-11', url: 'http://hl7.org/fhir/sid/icd-11' };
+    }
+  };
+
+  const systemInfo = getSystemInfo();
+
   return (
     <div className="form-group autocomplete-container" ref={containerRef}>
-      <label htmlFor="diagnosis">Procedure / Diagnosis</label>
       <div className="autocomplete-wrapper" style={{ position: 'relative' }}>
         <input
           ref={inputRef}
           type="text"
-          id="diagnosis"
           value={searchQuery}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
@@ -244,7 +295,7 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
               setShowDropdown(true);
             }
           }}
-          placeholder={placeholder}
+          placeholder={placeholder || `Search ${systemInfo.system} ${searchType === 'procedure' ? 'procedures' : 'diagnoses'}...`}
           autoComplete="off"
           style={{
             width: '100%',
@@ -292,7 +343,7 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
               fontSize: '16px',
               padding: '4px'
             }}
-            title="Search procedures"
+            title={`Search ${systemInfo.system} ${searchType === 'procedure' ? 'procedures' : 'diagnoses'}`}
           >
             {isLoading ? (
               <i className="fas fa-spinner fa-spin"></i>
@@ -301,6 +352,29 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
             )}
           </button>
         </div>
+      </div>
+      
+      <div className="system-info" style={{
+        fontSize: '11px',
+        color: '#6b7280',
+        marginTop: '4px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <span>
+          <i className="fas fa-database"></i> {systemInfo.system} System
+        </span>
+        {searchType === 'procedure' && (
+          <span title="ICHI - International Classification of Health Interventions">
+            <i className="fas fa-info-circle"></i> ICHI
+          </span>
+        )}
+        {searchType === 'diagnosis' && (
+          <span title="ICD-11 - International Classification of Diseases 11th Revision">
+            <i className="fas fa-info-circle"></i> ICD-11
+          </span>
+        )}
       </div>
       
       {showDropdown && searchResults.length > 0 && (
@@ -318,14 +392,15 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
             maxHeight: '300px',
             overflowY: 'auto',
             zIndex: 1000,
-            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+            marginTop: '2px'
           }}
         >
           {searchResults.map((item, index) => (
             <div
               key={`${item.Code}-${index}`}
               className={`autocomplete-item ${index === selectedIndex ? 'selected' : ''}`}
-              onClick={() => handleProcedureClick(item)}
+              onClick={() => handleItemClick(item)}
               style={{
                 padding: '12px 15px',
                 cursor: 'pointer',
@@ -337,17 +412,43 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
               onMouseEnter={() => setSelectedIndex(index)}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                <span style={{
-                  fontWeight: 'bold',
-                  color: index === selectedIndex ? 'white' : '#3b82f6',
-                  fontSize: '12px',
-                  minWidth: '40px',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  backgroundColor: index === selectedIndex ? 'rgba(255,255,255,0.2)' : '#f3f4f6'
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '2px'
                 }}>
-                  {item.Code}
-                </span>
+                  <span style={{
+                    fontWeight: 'bold',
+                    color: index === selectedIndex ? 'white' : '#3b82f6',
+                    fontSize: '11px',
+                    minWidth: '60px',
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    backgroundColor: index === selectedIndex ? 'rgba(255,255,255,0.2)' : '#f3f4f6',
+                    textAlign: 'center'
+                  }}>
+                    {item.Code}
+                  </span>
+                  {searchType === 'diagnosis' && item.Code && item.Code.includes('.') && (
+                    <span style={{
+                      fontSize: '9px',
+                      color: index === selectedIndex ? 'rgba(255,255,255,0.7)' : '#9ca3af',
+                      textAlign: 'center'
+                    }}>
+                      ICD-11
+                    </span>
+                  )}
+                  {searchType === 'procedure' && item.Code && item.Code.includes('.') && (
+                    <span style={{
+                      fontSize: '9px',
+                      color: index === selectedIndex ? 'rgba(255,255,255,0.7)' : '#9ca3af',
+                      textAlign: 'center'
+                    }}>
+                      ICHI
+                    </span>
+                  )}
+                </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: '600', marginBottom: '4px' }}>
                     {highlightText(item.Title, searchQuery.trim())}
@@ -355,9 +456,20 @@ const Autocomplete = ({ value, onChange, onProcedureSelect, onClear, placeholder
                   {item.Description && (
                     <div style={{
                       fontSize: '12px',
-                      color: index === selectedIndex ? 'rgba(255,255,255,0.9)' : '#6b7280'
+                      color: index === selectedIndex ? 'rgba(255,255,255,0.9)' : '#6b7280',
+                      lineHeight: '1.4'
                     }}>
                       {item.Description}
+                    </div>
+                  )}
+                  {item.Chapter && (
+                    <div style={{
+                      fontSize: '11px',
+                      color: index === selectedIndex ? 'rgba(255,255,255,0.7)' : '#9ca3af',
+                      marginTop: '4px',
+                      fontStyle: 'italic'
+                    }}>
+                      <i className="fas fa-book"></i> {item.Chapter}
                     </div>
                   )}
                 </div>
